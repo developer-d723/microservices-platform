@@ -50,8 +50,8 @@ services:
   user-service:
 
     build:
-      context: ./user-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: user-service/Dockerfile
     container_name: user-service
     depends_on:
       - postgres
@@ -66,8 +66,8 @@ services:
 
   notification-service:
     build:
-      context: ./notification-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: user-service/Dockerfile
     container_name: notification-service
     depends_on:
       - kafka
