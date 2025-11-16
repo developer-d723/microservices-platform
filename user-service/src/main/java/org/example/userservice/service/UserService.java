@@ -1,14 +1,15 @@
 package org.example.userservice.service;
 
 import lombok.RequiredArgsConstructor;
-import org.example.commondto.dto.event.EventType;
-import org.example.commondto.dto.event.UserEvent;
+
 import org.example.userservice.dto.CreateUserRequestDto;
 import org.example.userservice.dto.UpdateUserRequestDto;
 import org.example.userservice.dto.UserResponseDto;
-
 import org.example.userservice.entity.User;
+import org.example.commondto.dto.event.EventType;
+import org.example.commondto.dto.event.UserEvent;
 import org.example.userservice.exception.ResourceNotFoundException;
+import org.example.userservice.kafka.KafkaProducerService;
 import org.example.userservice.mapper.UserMapper;
 import org.example.userservice.repository.UserRepository;
 import org.springframework.stereotype.Service;
@@ -23,18 +24,18 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;
-    private final NotificationProducerService notificationProducer;
-
+    private final KafkaProducerService kafkaProducerService;
 
     @Transactional
     public UserResponseDto createUser(CreateUserRequestDto requestDto) {
         validate(requestDto.getName(), requestDto.getEmail(), requestDto.getAge());
+
         User user = userMapper.toUser(requestDto);
         User savedUser = userRepository.save(user);
 
-        notificationProducer.sendNotificationEvent(
-                new UserEvent(EventType.USER_CREATED, savedUser.getEmail())
-        );
+
+        kafkaProducerService.sendUserEvent(new UserEvent(EventType.USER_CREATED, savedUser.getEmail()));
+
 
         return userMapper.toUserResponseDto(savedUser);
     }
@@ -48,8 +49,7 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public List<UserResponseDto> findAllUsers() {
-        return userRepository.findAll()
-                .stream()
+        return userRepository.findAll().stream()
                 .map(userMapper::toUserResponseDto)
                 .collect(Collectors.toList());
     }
@@ -71,18 +71,14 @@ public class UserService {
 
     @Transactional
     public void deleteUser(Long id) {
-
         User userToDelete = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User with ID " + id + " not found."));
 
-        String email = userToDelete.getEmail();
+        String userEmail = userToDelete.getEmail();
 
         userRepository.deleteById(id);
 
-
-        notificationProducer.sendNotificationEvent(
-                new UserEvent(EventType.USER_DELETED, email)
-        );
+        kafkaProducerService.sendUserEvent(new UserEvent(EventType.USER_DELETED, userEmail));
     }
 
     private void validate(String name, String email, int age) {
